@@ -6,8 +6,24 @@ import random
 import base64
 from typing import Any, Dict, Optional, Tuple, Union
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
-
+def get_robust_session():
+    s = requests.Session()
+    # 配置重试策略：
+    # total=3: 总共重试3次
+    # backoff_factor=1: 重试间隔等待时间 (1s, 2s, 4s...)
+    # status_forcelist: 如果遇到 500, 502, 503, 504 错误也重试
+    retries = Retry(
+        total=3, 
+        backoff_factor=1, 
+        status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["POST", "GET"]
+    )
+    # 将此策略挂载到 https:// 开头的请求上
+    s.mount("https://", HTTPAdapter(max_retries=retries))
+    return s
 
 class RunpodClientError(Exception):
     def __init__(self, message: str, status_code: Optional[int] = None, raw: Optional[Union[Dict[str, Any], str]] = None):
@@ -158,7 +174,8 @@ def runsync(
     }
     payload = _build_input_payload(task_type, text, image_base64, return_png, extra)
     try:
-        resp = requests.post(url, headers=_headers(api_key), json=payload, timeout=(10, max(wait_ms / 1000, 30)))
+        session = get_robust_session()
+        resp = session.post(url, headers=_headers(api_key), json=payload, timeout=(20, max(wait_ms / 1000, 30)))
         if resp.status_code != 200:
             snippet = resp.text[:500]
             raise RunpodClientError(f"HTTP {resp.status_code}: 同步请求失败", resp.status_code, snippet)
@@ -208,8 +225,8 @@ def run_async(
     payload = _build_input_payload(task_type, text, image_base64, return_png, extra)
     t0 = time.time()
     try:
-        s = requests.Session()
-        resp = s.post(submit_url, headers=_headers(api_key), json=payload, timeout=(10, 30))
+        session = get_robust_session()
+        resp = session.post(submit_url, headers=_headers(api_key), json=payload, timeout=(20, 30))
         if resp.status_code != 200:
             snippet = resp.text[:500]
             raise RunpodClientError(f"HTTP {resp.status_code}: 提交任务失败", resp.status_code, snippet)
@@ -223,7 +240,7 @@ def run_async(
             if time.time() - t0 > timeout_s:
                 raise RunpodClientError("轮询超时", None, {"job_id": job_id})
             try:
-                r = s.get(status_url, headers=_headers(api_key), timeout=(5, 30))
+                r = session.get(status_url, headers=_headers(api_key), timeout=(5, 30))
             except requests.RequestException as e:
                 # 连接错误，轻微退避重试
                 time.sleep(min(base_interval_s, backoff) + random.uniform(0, 0.5))

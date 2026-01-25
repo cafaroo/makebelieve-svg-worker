@@ -14,7 +14,7 @@ import yaml
 from dotenv import load_dotenv
 from PIL import Image
 
-# 假设 runpod_client 在同一目录下，保持引用不变
+# Assume runpod_client stays in the same directory, so keep the import unchanged.
 from runpod_client import (
     RunpodClientError,
     encode_image_to_base64,
@@ -24,7 +24,7 @@ from runpod_client import (
 
 load_dotenv()
 
-# --- 配置加载 (保持原有逻辑不变) ---
+# --- Configuration loading (original logic preserved) ---
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "config.yaml")
 if not os.path.exists(CONFIG_PATH):
     raise FileNotFoundError(f"CONFIG_PATH not found: {CONFIG_PATH}")
@@ -42,7 +42,12 @@ MAX_MAX_LENGTH = 2048
 AVAILABLE_MODEL_SIZES = list(_config.get("models", {}).keys())
 if not AVAILABLE_MODEL_SIZES:
     raise ValueError("No models defined in config.yaml")
-DEFAULT_MODEL_SIZE = _config.get("default_model_size", AVAILABLE_MODEL_SIZES[0])
+PREFERRED_DEFAULT_MODEL = "4B"
+DEFAULT_MODEL_SIZE = (
+    PREFERRED_DEFAULT_MODEL
+    if PREFERRED_DEFAULT_MODEL in AVAILABLE_MODEL_SIZES
+    else _config.get("default_model_size", AVAILABLE_MODEL_SIZES[0])
+)
 
 task_config = _config.get("task_configs", {})
 TASK_CONFIGS = {
@@ -78,8 +83,8 @@ except ValueError:
 KEEPALIVE_TIP = "Cloudflare closes idle HTTPS streams after ~100s, so we stream progress updates."
 
 
-# --- 现代化 CSS ---
-# 为浅色 & 深色模式提供统一的高对比度视觉样式
+# --- Modern CSS ---
+# Provide a single high-contrast look for both light and dark themes.
 CUSTOM_CSS = """
 :root {
     --surface-card: rgba(255, 255, 255, 0.92);
@@ -117,7 +122,7 @@ body {
     color: var(--text-strong);
 }
 
-/* 头部样式 */
+/* Header styling */
 .header-container {
     text-align: center;
     margin-bottom: 28px;
@@ -164,7 +169,7 @@ body {
     color: var(--text-subtle);
 }
 
-/* 参数面板样式 */
+/* Settings panel styling */
 .settings-group {
     background: var(--surface-card) !important;
     border: 1px solid var(--border-elevated) !important;
@@ -176,7 +181,7 @@ body {
     backdrop-filter: blur(16px);
 }
 
-/* SVG 展示卡片网格 */
+/* SVG gallery grid */
 .svg-gallery-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -188,7 +193,7 @@ body {
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
-/* 单个 SVG 卡片 */
+/* Individual SVG card */
 .svg-card {
     background: var(--surface-card);
     border: 1px solid var(--border-elevated);
@@ -248,7 +253,7 @@ body {
     to { transform: rotate(360deg); }
 }
 
-/* 棋盘格背景：让透明 SVG 在深色/浅色下都可见 */
+/* Checkerboard background keeps transparency visible in any theme */
 .svg-preview-box {
     width: 180px;
     height: 180px;
@@ -267,7 +272,7 @@ body {
     background-size: 20px 20px;
     background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
 }
-/* 深色模式下稍微暗一点的棋盘格，防止太刺眼 */
+/* Slightly darker checkerboard for dark mode to avoid eye strain */
 .dark .svg-preview-box {
     background-color: #2f2f2f;
     background-image:
@@ -284,7 +289,7 @@ body {
     color: var(--text-subtle);
 }
 
-/* 代码区域优化 */
+/* Code block styling */
 .code-output textarea {
     font-family: 'JetBrains Mono', 'Fira Code', monospace !important;
     font-size: 12px !important;
@@ -294,11 +299,34 @@ body {
     color: var(--text-strong) !important;
 }
 
-/* 输入图片区域 */
+/* Input image area */
 .input-image {
     border-radius: 12px !important;
     overflow: hidden;
     border: 1px solid var(--border-elevated);
+}
+
+.notice-box {
+    margin-top: 16px;
+    background: var(--surface-card);
+    border: 1px solid var(--border-elevated);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    color: var(--text-strong);
+}
+.notice-box p {
+    margin: 0 0 12px 0;
+    line-height: 1.4;
+}
+.notice-box p:last-child {
+    margin-bottom: 0;
+}
+.notice-box .notice-translation {
+    display: block;
+    color: var(--text-subtle);
+    margin-top: 4px;
+    font-size: 0.95em;
 }
 
 .tips-box {
@@ -618,7 +646,7 @@ def _safe_int(value: Optional[Any], default: int) -> int:
 
 _rate_limit_cfg_raw = _config.get("rate_limit")
 _rate_limit_cfg = _rate_limit_cfg_raw if isinstance(_rate_limit_cfg_raw, dict) else {}
-_default_rl = max(0, _safe_int(_rate_limit_cfg.get("requests_per_hour"), 5))
+_default_rl = max(0, _safe_int(_rate_limit_cfg.get("requests_per_hour"), 10))
 _env_limit = os.environ.get("IP_RATE_LIMIT_PER_HOUR")
 RATE_LIMIT_REQUESTS_PER_WINDOW = max(
     0, _safe_int(_env_limit, _default_rl) if _env_limit is not None else _default_rl
@@ -637,22 +665,22 @@ _RATE_LIMIT_STATE: Dict[str, Deque[float]] = {}
 def _describe_window(seconds: int) -> str:
     if seconds % 3600 == 0:
         hours = seconds // 3600
-        return f"{hours} 小时"
+        return f"{hours} hour{'s' if hours != 1 else ''}"
     if seconds % 60 == 0:
         minutes = seconds // 60
-        return f"{minutes} 分钟"
-    return f"{seconds} 秒"
+        return f"{minutes} minute{'s' if minutes != 1 else ''}"
+    return f"{seconds} second{'s' if seconds != 1 else ''}"
 
 
 def _format_wait(seconds: float) -> str:
     seconds = max(1, int(seconds))
     if seconds < 60:
-        return f"{seconds} 秒"
+        return f"{seconds} second{'s' if seconds != 1 else ''}"
     minutes = seconds // 60
     if minutes < 60:
-        return f"{minutes} 分钟"
+        return f"{minutes} minute{'s' if minutes != 1 else ''}"
     hours = minutes // 60
-    return f"{hours} 小时"
+    return f"{hours} hour{'s' if hours != 1 else ''}"
 
 
 def _header_lookup(headers: Optional[Dict[str, Any]], name: str) -> Optional[str]:
@@ -695,8 +723,8 @@ def consume_rate_limit(request: Optional[Request]) -> Optional[str]:
                 f"[RateLimit] Blocked IP {ip}: {len(bucket)}/{RATE_LIMIT_REQUESTS_PER_WINDOW} in {window_desc} window."
             )
             return (
-                f"Rate limit reached: 每个 IP 在 {window_desc} 内最多生成 {RATE_LIMIT_REQUESTS_PER_WINDOW} 次。"
-                f" 请约 {wait_hint} 后再试。"
+                f"Rate limit reached: each IP can generate up to {RATE_LIMIT_REQUESTS_PER_WINDOW} times within {window_desc}. "
+                f"Please try again in about {wait_hint}."
             )
         bucket.append(now)
         _RATE_LIMIT_STATE[ip] = bucket
@@ -1012,8 +1040,8 @@ def build_ui():
     text_example_count = len(example_texts)
     image_example_count = len(example_images)
 
-    # 使用 Soft 主题作为基础，它比默认主题更现代、更圆润
-    # 并允许 primary_hue 调整主色调
+    # Use the Soft theme as a more modern, rounded baseline
+    # and rely on primary_hue to tweak the main accent color.
     theme = gr.themes.Soft(
         primary_hue="blue",
         neutral_hue="slate",
@@ -1118,11 +1146,11 @@ def build_ui():
                         
                         with gr.Group(elem_classes=["settings-group"]):
                             gr.Markdown("### ⚙️ Generation Settings")
-                            text_model = gr.Dropdown(
+                            text_model = gr.Radio(
                                 choices=AVAILABLE_MODEL_SIZES,
                                 value=DEFAULT_MODEL_SIZE,
                                 label="Model Size",
-                                info="8B: Better Quality cold start 90-150s · warm ~20s | 4B: Fastercold start 60-90s · warm ~10s"
+                                info="8B: Better Quality cold start 90-150s · warm ~10s | 4B: Fastercold start 60-90s · warm ~5s"
                             )
 
                             text_num_candidates = gr.Slider(
@@ -1186,6 +1214,24 @@ def build_ui():
 
                     # Right Column: Output
                     with gr.Column(scale=2):
+                        gr.HTML(
+                            """
+                            <div class=\"notice-box\">
+                                <p>
+                                    首次生成需创建实例约需 1-2 分钟，后续仅约 10秒 /个，请耐心等待。
+                                    <span class=\"notice-translation\">The first run needs about 1-2 minutes to spin up an instance; later runs take roughly 10 seconds per job. Please be patient.</span>
+                                </p>
+                                <p>
+                                    若结果不理想可多次生成，模型随机性会导致差异，属正常现象。
+                                    <span class=\"notice-translation\">If a result is not ideal, generate again—model randomness creates variation and that is expected.</span>
+                                </p>    
+                                <p>
+                                    当前为免费体验，请勿过度探索，感谢理解支持。
+                                    <span class=\"notice-translation\">This is a free preview. Please avoid excessive usage, and thank you for your understanding and support.</span>
+                                </p>
+                            </div>
+                            """
+                        )
                         text_gallery = gr.HTML(
                             value='<div class="empty-box">Generated SVGs will appear here once you run generation.</div>',
                             label="Gallery"
@@ -1219,7 +1265,12 @@ def build_ui():
                         )
                         with gr.Group(elem_classes=["settings-group"]):
                             gr.Markdown("### ⚙️ Generation Settings")
-                            img_model = gr.Dropdown(choices=AVAILABLE_MODEL_SIZES, value=DEFAULT_MODEL_SIZE, label="Model Size")
+                            img_model = gr.Radio(
+                                choices=AVAILABLE_MODEL_SIZES,
+                                value=DEFAULT_MODEL_SIZE,
+                                label="Model Size",
+                                info="8B: Better Quality cold start 90-150s · warm ~10s | 4B: Fastercold start 60-90s · warm ~5s"
+                            )
                             img_num_candidates = gr.Slider(
                                 1,
                                 MAX_NUM_CANDIDATES,
@@ -1274,6 +1325,24 @@ def build_ui():
                             )
 
                     with gr.Column(scale=2, min_width=500):
+                        gr.HTML(
+                            """
+                            <div class=\"notice-box\">
+                                <p>
+                                    首次生成需创建实例约需 1-2 分钟，后续仅约 10秒 /个，请耐心等待。
+                                    <span class=\"notice-translation\">The first run needs about 1-2 minutes to spin up an instance; later runs take roughly 10 seconds per job. Please be patient.</span>
+                                </p>
+                                <p>
+                                    若结果不理想可多次生成，模型随机性会导致差异，属正常现象。
+                                    <span class=\"notice-translation\">If a result is not ideal, generate again—model randomness creates variation and that is expected.</span>
+                                </p>    
+                                <p>
+                                    当前为免费体验，请勿过度探索，感谢理解支持。
+                                    <span class=\"notice-translation\">This is a free preview. Please avoid excessive usage, and thank you for your understanding and support.</span>
+                                </p>
+                            </div>
+                            """
+                        )
                         gr.HTML(IMAGE_TIPS_HTML)
                         image_processed = gr.Image(label="Processed Input Preview", type="pil", height=150, interactive=False, show_download_button=False)
                         image_gallery = gr.HTML(
@@ -1293,7 +1362,7 @@ def build_ui():
         gr.HTML(
             """
             <div class="icp-record">
-                <span>ICP备案: <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">渝ICP备2022010349号-2</a></span>
+                <span>ICP Filing: <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">Yu ICP No. 2022010349-2</a></span>
             </div>
             """
         )
