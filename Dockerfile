@@ -25,25 +25,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy source
 COPY . /workspace
 
-# Upgrade pip
-RUN pip install --no-cache-dir --upgrade pip
-
-# Install PyTorch with CUDA 12.1 wheels (compatible with Runpod 12.x)
-# This index serves cu121 wheels; CPU fallback isn't needed on GPU runtimes.
-
 # Core Python deps
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Default ENV (can be overridden by Runpod env settings)
-ENV WEIGHT_PATH=/runpod-volume/OmniSVG \
-    WEIGHT_PATH_4B=/runpod-volume/OmniSVG1.1_4B \
-    WEIGHT_PATH_8B=/runpod-volume/OmniSVG1.1_8B \
+# ─── Bake models into image (no network volume needed) ────────────────────────
+
+# OmniSVG 1.1 4B weights (7.7GB)
+RUN mkdir -p /workspace/models/OmniSVG1.1_4B && \
+    wget -q --show-progress -O /workspace/models/OmniSVG1.1_4B/pytorch_model.bin \
+        "https://huggingface.co/OmniSVG/OmniSVG1.1_4B/resolve/main/pytorch_model.bin"
+
+# config.yaml from original OmniSVG repo (token schema)
+RUN wget -q -O /workspace/config.yaml \
+        "https://huggingface.co/OmniSVG/OmniSVG/resolve/main/config.yaml"
+
+# Qwen2.5-VL-3B-Instruct (7.5GB)
+RUN pip install --no-cache-dir huggingface_hub && \
+    python -c "from huggingface_hub import snapshot_download; \
+    snapshot_download('Qwen/Qwen2.5-VL-3B-Instruct', \
+        local_dir='/workspace/models/Qwen2.5-VL-3B-Instruct')"
+
+# Point env vars to baked-in models
+ENV WEIGHT_PATH=/workspace/models/OmniSVG1.1_4B \
+    WEIGHT_PATH_4B=/workspace/models/OmniSVG1.1_4B \
     CONFIG_PATH=/workspace/config.yaml \
-    QWEN_LOCAL_DIR=/runpod-volume/Qwen2.5-VL-3B-Instruct \
-    QWEN_MODEL_4B=/runpod-volume/Qwen2.5-VL-3B-Instruct \
-    QWEN_MODEL_8B=/runpod-volume/Qwen2.5-VL-7B-Instruct \
+    QWEN_LOCAL_DIR=/workspace/models/Qwen2.5-VL-3B-Instruct \
+    QWEN_MODEL_4B=/workspace/models/Qwen2.5-VL-3B-Instruct \
     SVG_TOKENIZER_CONFIG=/workspace/config.yaml \
-    ENABLE_DUMMY=true
+    ENABLE_DUMMY=false
 
 # Serverless entrypoint
 CMD ["python", "-u", "handler.py"]
