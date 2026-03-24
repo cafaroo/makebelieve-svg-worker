@@ -41,10 +41,12 @@ RUN wget -q -O /workspace/config.yaml \
         "https://huggingface.co/OmniSVG/OmniSVG/resolve/main/config.yaml"
 
 # Qwen2.5-VL-3B-Instruct (7.5GB)
+# HF_TOKEN set as env var on RunPod endpoint (optional, avoids rate limits)
 RUN pip install --no-cache-dir huggingface_hub && \
-    python -c "from huggingface_hub import snapshot_download; \
+    python -c "import os; from huggingface_hub import snapshot_download; \
     snapshot_download('Qwen/Qwen2.5-VL-3B-Instruct', \
-        local_dir='/workspace/models/Qwen2.5-VL-3B-Instruct')"
+        local_dir='/workspace/models/Qwen2.5-VL-3B-Instruct', \
+        token=os.environ.get('HF_TOKEN'))"
 
 # Point env vars to baked-in models
 ENV WEIGHT_PATH=/workspace/models/OmniSVG1.1_4B \
