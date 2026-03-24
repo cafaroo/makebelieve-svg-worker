@@ -59,3 +59,4 @@ ENV WEIGHT_PATH=/workspace/models/OmniSVG1.1_4B \
 
 # Serverless entrypoint
 CMD ["python", "-u", "handler.py"]
+# Build 20260324010936
