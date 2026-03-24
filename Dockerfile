@@ -36,9 +36,7 @@ RUN mkdir -p /workspace/models/OmniSVG1.1_4B && \
     wget -q --show-progress -O /workspace/models/OmniSVG1.1_4B/pytorch_model.bin \
         "https://huggingface.co/OmniSVG/OmniSVG1.1_4B/resolve/main/pytorch_model.bin"
 
-# config.yaml from original OmniSVG repo (token schema)
-RUN wget -q -O /workspace/config.yaml \
-        "https://huggingface.co/OmniSVG/OmniSVG/resolve/main/config.yaml"
+# config.yaml already in repo (COPY . /workspace) — has models section for 4B/8B
 
 # Qwen2.5-VL-3B-Instruct (7.5GB)
 # HF_TOKEN set as env var on RunPod endpoint (optional, avoids rate limits)
